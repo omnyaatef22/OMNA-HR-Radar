@@ -1,0 +1,1118 @@
+{
+  "name": "HR Radar 1 · Applications & Screening",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Apply now",
+        "formDescription": "Upload your CV as a PDF. We reply to every applicant within 3 working days.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Full name",
+              "fieldName": "name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "fieldName": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Mobile",
+              "fieldName": "phone",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Position",
+              "fieldType": "dropdown",
+              "fieldName": "job",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "J-01 · Junior Automation Engineer"
+                  },
+                  {
+                    "option": "J-02 · Data Analyst"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Years of experience",
+              "fieldType": "number",
+              "fieldName": "years",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "CV (PDF, max 5 MB)",
+              "fieldType": "file",
+              "fieldName": "cv",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "I agree that my data is used for this application only",
+              "fieldType": "checkbox",
+              "fieldName": "consent",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "I agree"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Thank you! Your application was received. You will get an email from us soon."
+            }
+          }
+        }
+      },
+      "id": "n263",
+      "name": "Application Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check every field and the file itself. The CV binary is renamed to \"data\" for the next nodes.\nconst j = $json; const bins = $input.first().binary || {};\nconst g = (k, l) => String(j[k] ?? j[l] ?? '').trim();\nconst file = Object.values(bins)[0];\nconst a = { name: g('name', 'Full name'), email: g('email', 'Email').toLowerCase(), phone: g('phone', 'Mobile').replace(/[^0-9+]/g, '').replace(/^(\\+20|0020|20)(?=1)/, '0'),\n  job_id: (g('job', 'Position').match(/J-\\d{2}/) || [''])[0], years: Number(g('years', 'Years of experience')) };\nconst p = [];\nif (a.name.split(/\\s+/).length < 2) p.push('please write your full name');\nif (!/^[^\\s@]+@[^\\s@]+\\.[a-z]{2,}$/.test(a.email)) p.push('email address looks invalid');\nif (!/^01[0125]\\d{8}$/.test(a.phone)) p.push('mobile must be an Egyptian number like 01012345678');\nif (!a.job_id) p.push('position missing');\nif (!(a.years >= 0 && a.years <= 50)) p.push('years of experience must be between 0 and 50');\nif (!file) p.push('CV file missing');\nelse { if (!/pdf/.test(file.mimeType || '')) p.push('CV must be a PDF'); if (Number(file.fileSize?.toString().replace(/[^0-9.]/g, '')) > 5 * 1024 && /MB/.test(file.fileSize || '')) p.push('CV is larger than 5 MB'); }\nreturn [{ json: { ...a, problems: p, ok: !p.length }, binary: file ? { data: file } : {} }];"
+      },
+      "id": "n264",
+      "name": "Validate Application",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c265",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "n266",
+      "name": "Application Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Your application needs one more step",
+        "emailType": "text",
+        "message": "={{ 'Hello ' + $json.name + ',\\n\\nWe could not process your application because: ' + $json.problems.join('; ') + '.\\nPlease apply again: PUT_N8N_URL/form/hr-apply\\n\\nHR team' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n267",
+      "name": "Email: Please Fix",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        160
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 502,
+          "mode": "id",
+          "cachedResultName": "Applicants"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email",
+              "lookupValue": "={{ $json.email }}"
+            },
+            {
+              "lookupColumn": "job_id",
+              "lookupValue": "={{ $json.job_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n268",
+      "name": "Find Earlier Application",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        -96
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c269",
+              "leftValue": "={{ $json.applicant_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "n270",
+      "name": "New Applicant?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        880,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Validate Application').item.json.email }}",
+        "subject": "We already have your application",
+        "emailType": "text",
+        "message": "={{ 'Hello ' + $('Validate Application').item.json.name + ',\\n\\nWe already received your application for ' + $('Validate Application').item.json.job_id + ' on ' + $json.received_at + '. No need to apply twice; we will be in touch.\\n\\nHR team' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n271",
+      "name": "Email: Already Received",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        48
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Validate Application').first().json, binary: $('Validate Application').first().binary }];"
+      },
+      "id": "n272",
+      "name": "Restore CV File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "n273",
+      "name": "Extract CV Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        -208
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 501,
+          "mode": "id",
+          "cachedResultName": "Jobs"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "job_id",
+              "lookupValue": "={{ $('Validate Application').item.json.job_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n274",
+      "name": "Read Job",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1552,
+        -208
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Remove personal identifiers before the model sees the CV, so the score depends on skills, not on who the person is.\nconst a = $('Validate Application').first().json; const job = $input.first().json;\nlet cv = String($('Extract CV Text').first().json.text || '');\nif (cv.replace(/\\s/g, '').length < 300) throw new Error('VALIDATION: CV for ' + a.email + ' has almost no text (scanned image?)');\ncv = cv.replace(/[^\\s@]+@[^\\s@]+/g, '[email]').replace(/(\\+?\\d[\\d\\s-]{8,}\\d)/g, '[phone]').split(a.name).join('[candidate]')\n  .replace(/\\b(male|female|married|single|religion|date of birth|birth date|age|ذكر|أنثى|متزوج|أعزب|الديانة|تاريخ الميلاد)\\b[^\\n]*/gi, '[removed]').slice(0, 12000);\nreturn [{ json: { job, prompt: 'You screen CVs fairly. Ignore name, gender, age, religion, nationality, photos and marital status. Job: ' + job.title +\n  '. Must have: ' + job.must_have + '. Nice to have: ' + job.nice_to_have + '. Minimum years: ' + job.min_years +\n  '. Return JSON only: {\"score\": 0-100 integer, \"years_experience\": number, \"skills\": [\"...\"], \"must_have_met\": [\"...\"], \"must_have_missing\": [\"...\"], \"reasons\": [\"3 short evidence-based reasons quoting the CV\"]}. CV:\\n<<<' + cv + '>>>' } }];"
+      },
+      "id": "n275",
+      "name": "Prepare Fair Scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json.prompt }].concat($json.b64 ? [{ inline_data: { mime_type: $json.mime, data: $json.b64 } }] : []) }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "n276",
+      "name": "AI Score CV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1984,
+        -208
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clamp and sanity-check the model output, then apply HR's rules (not the model's) to decide.\nconst a = $('Validate Application').first().json; const job = $('Prepare Fair Scoring').first().json.job;\nlet s; try { s = JSON.parse(($json.candidates?.[0]?.content?.parts || []).map(p => p.text).join('')); } catch (e) { throw new Error('AI_OUTPUT: CV score was not valid JSON for ' + a.email); }\nlet score = Math.round(Number(s.score)); if (!(score >= 0 && score <= 100)) throw new Error('AI_OUTPUT: score out of range: ' + s.score);\nconst reasons = (s.reasons || []).filter(r => String(r).length > 10);\nif (reasons.length < 2) throw new Error('AI_OUTPUT: score for ' + a.email + ' came without evidence');\nconst missing = s.must_have_missing || [];\nif (missing.length) score = Math.min(score, 60); // a missing must-have can never lead to an interview\nif (a.years < Number(job.min_years)) score = Math.min(score, 55);\nconst decision = score >= 75 ? 'interview' : score >= 50 ? 'hold' : 'reject';\nconst id = 'A-' + $now.setZone('Africa/Cairo').toFormat('yyMMdd') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();\nreturn [{ json: { ...a, applicant_id: id, score, decision, skills: (s.skills || []).slice(0, 12).join(', '), reasons: reasons.join(' | ') + (missing.length ? ' | missing: ' + missing.join(', ') : ''), interviewer: job.interviewer_email, job_title: job.title } }];"
+      },
+      "id": "n277",
+      "name": "Validate Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 502,
+          "mode": "id",
+          "cachedResultName": "Applicants"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "applicant_id": "={{ $json.applicant_id }}",
+            "received_at": "={{ $now.setZone('Africa/Cairo').toFormat('yyyy-MM-dd HH:mm') }}",
+            "job_id": "={{ $json.job_id }}",
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "phone": "={{ $json.phone }}",
+            "years": "={{ $json.years }}",
+            "skills": "={{ $json.skills }}",
+            "score": "={{ $json.score }}",
+            "reasons": "={{ $json.reasons }}",
+            "decision": "={{ $json.decision }}",
+            "status": "screened"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "applicant_id",
+              "displayName": "applicant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "job_id",
+              "displayName": "job_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "years",
+              "displayName": "years",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skills",
+              "displayName": "skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reasons",
+              "displayName": "reasons",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "decision",
+              "displayName": "decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "useAppend": true
+        }
+      },
+      "id": "n278",
+      "name": "Save Applicant",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2432,
+        -208
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c279",
+                    "leftValue": "={{ $('Validate Score').item.json.decision }}",
+                    "rightValue": "interview",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "interview"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c280",
+                    "leftValue": "={{ $('Validate Score').item.json.decision }}",
+                    "rightValue": "hold",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "hold"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c281",
+                    "leftValue": "={{ $('Validate Score').item.json.decision }}",
+                    "rightValue": "reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reject"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "n282",
+      "name": "Route Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2640,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Next 3 working days (Sun–Thu) at 11:00, 13:00, 15:00 Cairo time. Calendar decides which is free.\nconst out = []; let d = $now.setZone('Africa/Cairo').plus({ days: 1 }).startOf('day');\nwhile (out.length < 9) { if (![5, 6].includes(d.weekday)) for (const h of [11, 13, 15]) out.push({ json: { start: d.set({ hour: h }).toISO(), end: d.set({ hour: h, minute: 45 }).toISO() } }); d = d.plus({ days: 1 }); }\nreturn out;"
+      },
+      "id": "n283",
+      "name": "Propose Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "primary"
+        },
+        "timeMin": "={{ $json.start }}",
+        "timeMax": "={{ $json.end }}",
+        "options": {
+          "outputFormat": "availability"
+        }
+      },
+      "id": "n284",
+      "name": "Check Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        3088,
+        -400
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const slots = $('Propose Slots').all().map(i => i.json); const free = $input.all().map((i, k) => ({ ...slots[k], available: i.json.available }));\nconst slot = free.find(s => s.available);\nif (!slot) throw new Error('VALIDATION: no free interview slot in the next 3 working days for ' + $('Validate Score').first().json.email);\nreturn [{ json: { ...$('Validate Score').first().json, ...slot } }];"
+      },
+      "id": "n285",
+      "name": "Pick First Free Slot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3312,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "primary"
+        },
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ $json.email }}",
+            "={{ $json.interviewer }}"
+          ],
+          "description": "={{ 'Score ' + $json.score + '\\n' + $json.reasons }}",
+          "summary": "={{ 'Interview · ' + $json.job_title + ' · ' + $json.name }}"
+        }
+      },
+      "id": "n286",
+      "name": "Create Interview Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        3520,
+        -400
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 502,
+          "mode": "id",
+          "cachedResultName": "Applicants"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "applicant_id": "={{ $('Pick First Free Slot').item.json.applicant_id }}",
+            "interview_at": "={{ DateTime.fromISO($('Pick First Free Slot').item.json.start).toFormat('yyyy-MM-dd HH:mm') }}",
+            "calendar_event_id": "={{ $json.id }}",
+            "status": "interview_booked"
+          },
+          "matchingColumns": [
+            "applicant_id"
+          ],
+          "schema": [
+            {
+              "id": "applicant_id",
+              "displayName": "applicant_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "interview_at",
+              "displayName": "interview_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "calendar_event_id",
+              "displayName": "calendar_event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "id": "n287",
+      "name": "Record Interview",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3744,
+        -400
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Pick First Free Slot').item.json.email }}",
+        "subject": "={{ 'Interview invitation · ' + $('Pick First Free Slot').item.json.job_title }}",
+        "emailType": "text",
+        "message": "={{ 'Hello ' + $('Pick First Free Slot').item.json.name + ',\\n\\nThank you for applying. We would like to meet you on ' + DateTime.fromISO($('Pick First Free Slot').item.json.start).setZone('Africa/Cairo').toFormat('cccc d LLLL, HH:mm') + ' (Cairo time). A calendar invitation is on its way.\\n\\nHR team' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n288",
+      "name": "Email: Interview Invite",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3968,
+        -400
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_CHAT_ID",
+        "text": "={{ '🟡 On hold: ' + $('Validate Score').item.json.name + ' · ' + $('Validate Score').item.json.job_id + ' · score ' + $('Validate Score').item.json.score + '\\n' + $('Validate Score').item.json.reasons }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n289",
+      "name": "Tell HR: On Hold",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2896,
+        -176
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Validate Score').item.json.email }}",
+        "subject": "={{ 'Your application · ' + $('Validate Score').item.json.job_title }}",
+        "emailType": "text",
+        "message": "={{ 'Hello ' + $('Validate Score').item.json.name + ',\\n\\nThank you for your interest. After reviewing your CV we decided to move forward with other candidates whose experience matches this role more closely. We will keep your CV for future openings.\\n\\nBest of luck,\\nHR team' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n290",
+      "name": "Email: Polite Rejection",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2864,
+        48
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Validate Application').item.json.email }}",
+        "subject": "We could not read your CV",
+        "emailType": "text",
+        "message": "={{ 'Hello ' + $('Validate Application').item.json.name + ',\\n\\nYour CV file could not be read (it may be a scanned image or protected). Please apply again with a text-based PDF: PUT_N8N_URL/form/hr-apply\\n\\nHR team' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n291",
+      "name": "Email: Send a Text PDF",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Application Form": {
+      "main": [
+        [
+          {
+            "node": "Validate Application",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Application": {
+      "main": [
+        [
+          {
+            "node": "Application Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Application Valid?": {
+      "main": [
+        [
+          {
+            "node": "Find Earlier Application",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email: Please Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Earlier Application": {
+      "main": [
+        [
+          {
+            "node": "New Applicant?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Applicant?": {
+      "main": [
+        [
+          {
+            "node": "Restore CV File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email: Already Received",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore CV File": {
+      "main": [
+        [
+          {
+            "node": "Extract CV Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract CV Text": {
+      "main": [
+        [
+          {
+            "node": "Read Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email: Send a Text PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Job": {
+      "main": [
+        [
+          {
+            "node": "Prepare Fair Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Fair Scoring": {
+      "main": [
+        [
+          {
+            "node": "AI Score CV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Score CV": {
+      "main": [
+        [
+          {
+            "node": "Validate Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Score": {
+      "main": [
+        [
+          {
+            "node": "Save Applicant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Applicant": {
+      "main": [
+        [
+          {
+            "node": "Route Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Decision": {
+      "main": [
+        [
+          {
+            "node": "Propose Slots",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tell HR: On Hold",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email: Polite Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Propose Slots": {
+      "main": [
+        [
+          {
+            "node": "Check Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Calendar": {
+      "main": [
+        [
+          {
+            "node": "Pick First Free Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick First Free Slot": {
+      "main": [
+        [
+          {
+            "node": "Create Interview Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Interview Event": {
+      "main": [
+        [
+          {
+            "node": "Record Interview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Interview": {
+      "main": [
+        [
+          {
+            "node": "Email: Interview Invite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Cairo"
+  }
+}
